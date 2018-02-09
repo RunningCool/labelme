@@ -78,14 +78,21 @@ class Shape(object):
             self.line_color = line_color
 
     def close(self):
-        assert len(self.points) > 2
+        assert len(self.points) >= 2
+        print("[DEBUG] Closeing shape with {} points".format(len(self.points)))
         self._closed = True
 
     def addPoint(self, point):
+        # if self.points and point == self.points[0]:
+        #     self.close()
+        # else:
+        #     self.points.append(point)
+        to_close = False
         if self.points and point == self.points[0]:
+            to_close = True
+        self.points.append(point)
+        if to_close:
             self.close()
-        else:
-            self.points.append(point)
 
     def popPoint(self):
         if self.points:
@@ -118,8 +125,8 @@ class Shape(object):
             for i, p in enumerate(self.points):
                 line_path.lineTo(p)
                 self.drawVertex(vrtx_path, i)
-            if self.isClosed():
-                line_path.lineTo(self.points[0])
+            # if self.isClosed():
+            #     line_path.lineTo(self.points[0])
 
             painter.drawPath(line_path)
             painter.drawPath(vrtx_path)
@@ -197,4 +204,3 @@ class Shape(object):
 
     def __setitem__(self, key, value):
         self.points[key] = value
-

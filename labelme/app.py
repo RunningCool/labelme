@@ -149,7 +149,14 @@ class MainWindow(QMainWindow, WindowMixin):
         self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
         self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
 
-        self.setCentralWidget(scroll)
+
+        self.groupBox = QGroupBox()
+        self.groupBoxLayout = QHBoxLayout()
+        self.groupBoxLayout.addWidget(scroll)
+        self.groupBoxLayout.addWidget(QPushButton("Correspond"))
+        self.groupBox.setLayout(self.groupBoxLayout)
+
+        self.setCentralWidget(self.groupBox)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
         self.dockFeatures = QDockWidget.DockWidgetClosable\
                           | QDockWidget.DockWidgetFloatable

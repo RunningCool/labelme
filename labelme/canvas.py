@@ -122,6 +122,7 @@ class Canvas(QWidget):
 
         # Polygon drawing.
         if self.drawing():
+            print("drawing")
             self.overrideCursor(CURSOR_DRAW)
             if self.current:
                 color = self.lineColor
@@ -129,12 +130,34 @@ class Canvas(QWidget):
                     # Don't allow the user to draw outside the pixmap.
                     # Project the point to the pixmap's edges.
                     pos = self.intersectionPoint(self.current[-1], pos)
-                elif len(self.current) > 1 and self.closeEnough(pos, self.current[0]):
-                    # Attract line to starting point and colorise to alert the user:
-                    pos = self.current[0]
-                    color = self.current.line_color
-                    self.overrideCursor(CURSOR_POINT)
-                    self.current.highlightVertex(0, Shape.NEAR_VERTEX)
+                # elif len(self.current) > 1 and self.closeEnough(pos, self.current[0]):
+                #     # Attract line to starting point and colorise to alert the user:
+                #     pos = self.current[0]
+                #     color = self.current.line_color
+                #     self.overrideCursor(CURSOR_POINT)
+                #     self.current.highlightVertex(0, Shape.NEAR_VERTEX)
+                else:
+                    idx_local = None
+                    if len(self.current) > 0:
+                        idx_local = self.closeEnoughPoints(pos, points=self.current.points)
+
+                    if idx_local is not None:
+                        pos = self.current[idx_local]
+                        self.overrideCursor(CURSOR_POINT)
+                        self.current.highlightVertex(idx_local, Shape.NEAR_VERTEX)
+                    # elif len(self.canvas_points) > 0:
+                    #     idx_canvas = self.closeEnoughPoints(pos, points=self.canvas_points)
+                    #     if idx_canvas is not None:
+                    #         pos = self.xy2QPointF(self.canvas_points[idx_canvas])
+                    #         #color = self.current.line_color
+                    #         self.overrideCursor(CURSOR_POINT)
+                    #         #self.current.highlightVertex(idx_1, Shape.NEAR_VERTEX)
+                    #     elif len(self.canvas_lines) > 0:
+                    #         p1 = self.current.lastPoint()
+                    #         intersection = self.intersectionWithCanvasLines(pos, p1)
+                    #         if intersection is not None:
+                    #             pos = self.xy2QPointF(intersection)
+                    #             self.overrideCursor(CURSOR_ONLINE)
                 self.line[1] = pos
                 self.line.line_color = color
                 self.repaint()
@@ -155,9 +178,24 @@ class Canvas(QWidget):
         # Polygon/Vertex moving.
         if Qt.LeftButton & ev.buttons():
             if self.selectedVertex():
-                self.boundedMoveVertex(pos)
+                # self.boundedMoveVertex(pos)
+                # self.shapeMoved.emit()
+                # self.repaint()
+                idx_local = None
+                if len(self.hShape.points) > 0:
+                    idx_local = self.closeEnoughPoints(pos, points=self.hShape.points, index=self.hVertex)
+
+                assert idx_local != self.hVertex
+                if idx_local is not None:
+                    pos = self.hShape.points[idx_local]
+                    self.overrideCursor(CURSOR_POINT)
+                    self.hShape.highlightVertex(idx_local, Shape.NEAR_VERTEX)
+
+                self.hShape.points[self.hVertex] = pos
                 self.shapeMoved.emit()
                 self.repaint()
+                self.hShape.highlightClear()
+
             elif self.selectedShape and self.prevPoint:
                 self.overrideCursor(CURSOR_MOVE)
                 self.boundedMoveShape(self.selectedShape, pos)
@@ -207,9 +245,12 @@ class Canvas(QWidget):
         if ev.button() == Qt.LeftButton:
             if self.drawing():
                 if self.current:
+                    print("[DEBUG] Points b4 drawing: {} ".format(len(self.current.points)))
                     self.current.addPoint(self.line[1])
+                    print("[DEBUG] Points after drawing: {} ".format(len(self.current.points)))
                     self.line[0] = self.current[-1]
                     if self.current.isClosed():
+                        print("[DEBUG] Points b4 finalising: {} ".format(len(self.current.points)))
                         self.finalise()
                 elif not self.outOfPixmap(pos):
                     self.current = Shape()
@@ -267,13 +308,13 @@ class Canvas(QWidget):
         self._hideBackround = self.hideBackround if enable else False
 
     def canCloseShape(self):
-        return self.drawing() and self.current and len(self.current) > 2
+        return self.drawing() and self.current and len(self.current) >= 2
 
     def mouseDoubleClickEvent(self, ev):
         # We need at least 4 points here, since the mousePress handler
         # adds an extra one before this handler is called.
-        if self.canCloseShape() and len(self.current) > 3:
-            self.current.popPoint()
+        if self.canCloseShape() and len(self.current) >= 2:
+            # self.current.popPoint()
             self.finalise()
 
     def selectShape(self, shape):
@@ -390,7 +431,7 @@ class Canvas(QWidget):
         Shape.scale = self.scale
         for shape in self.shapes:
             if (shape.selected or not self._hideBackround) and self.isVisible(shape):
-                shape.fill = shape.selected or shape == self.hShape
+                # shape.fill = shape.selected or shape == self.hShape
                 shape.paint(p)
         if self.current:
             self.current.paint(p)
@@ -425,6 +466,16 @@ class Canvas(QWidget):
         self.setHiding(False)
         self.newShape.emit()
         self.update()
+
+    def closeEnoughPoints(self, p1, points, index=None):
+        assert(len(points) >= 1)
+        idx = None
+        # print(type(p1))
+        # print(points[0].x())
+        for i in range(len(points)):
+            if i != index and distance(p1-points[i]) < self.epsilon:
+                return i
+        return None
 
     def closeEnough(self, p1, p2):
         #d = distance(p1 - p2)
@@ -561,4 +612,3 @@ class Canvas(QWidget):
         self.restoreCursor()
         self.pixmap = None
         self.update()
-
