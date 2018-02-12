@@ -42,11 +42,11 @@ CURSOR_GRAB    = Qt.OpenHandCursor
 #class Canvas(QGLWidget):
 class Canvas(QWidget):
     zoomRequest = pyqtSignal(int)
-    scrollRequest = pyqtSignal(int, int)
-    newShape = pyqtSignal()
-    selectionChanged = pyqtSignal(bool)
+    scrollRequest = pyqtSignal(int, int, int)
+    newShape = pyqtSignal(int)
+    selectionChanged = pyqtSignal(int, bool)
     shapeMoved = pyqtSignal()
-    drawingPolygon = pyqtSignal(bool)
+    drawingPolygon = pyqtSignal(int, bool)
 
     CREATE, EDIT = 0, 1
 
@@ -55,6 +55,8 @@ class Canvas(QWidget):
     def __init__(self, *args, **kwargs):
         super(Canvas, self).__init__(*args, **kwargs)
         # Initialise local state.
+        self.id = kwargs['id']
+        assert(self.id >= 0)
         self.mode = self.EDIT
         self.shapes = []
         self.current = None
@@ -257,7 +259,7 @@ class Canvas(QWidget):
                     self.current.addPoint(pos)
                     self.line.points = [pos, pos]
                     self.setHiding()
-                    self.drawingPolygon.emit(True)
+                    self.drawingPolygon.emit(self.id, True)
                     self.update()
             else:
                 self.selectShapePoint(pos)
@@ -322,7 +324,7 @@ class Canvas(QWidget):
         shape.selected = True
         self.selectedShape = shape
         self.setHiding()
-        self.selectionChanged.emit(True)
+        self.selectionChanged.emit(self.id, True)
         self.update()
 
     def selectShapePoint(self, point):
@@ -338,7 +340,7 @@ class Canvas(QWidget):
                 self.selectedShape = shape
                 self.calculateOffsets(shape, point)
                 self.setHiding()
-                self.selectionChanged.emit(True)
+                self.selectionChanged.emit(self.id, True)
                 return
 
     def calculateOffsets(self, shape, point):
@@ -383,7 +385,7 @@ class Canvas(QWidget):
             self.selectedShape.selected = False
             self.selectedShape = None
             self.setHiding(False)
-            self.selectionChanged.emit(False)
+            self.selectionChanged.emit(self.id, False)
             self.update()
 
     def deleteSelected(self):
@@ -464,7 +466,7 @@ class Canvas(QWidget):
         self.shapes.append(self.current)
         self.current = None
         self.setHiding(False)
-        self.newShape.emit()
+        self.newShape.emit(self.id)
         self.update()
 
     def closeEnoughPoints(self, p1, points, index=None):
@@ -550,26 +552,26 @@ class Canvas(QWidget):
                 self.zoomRequest.emit(delta.y())
             else:
                 # scroll
-                self.scrollRequest.emit(delta.x(), Qt.Horizontal)
-                self.scrollRequest.emit(delta.y(), Qt.Vertical)
+                self.scrollRequest.emit(self.id, delta.x(), Qt.Horizontal)
+                self.scrollRequest.emit(self.id, delta.y(), Qt.Vertical)
         else:
             if ev.orientation() == Qt.Vertical:
                 mods = ev.modifiers()
                 if Qt.ControlModifier == int(mods):  # with Ctrl/Command key
                     self.zoomRequest.emit(ev.delta())
                 else:
-                    self.scrollRequest.emit(ev.delta(),
+                    self.scrollRequest.emit(self.id, ev.delta(),
                         Qt.Horizontal if (Qt.ShiftModifier == int(mods))\
                                       else Qt.Vertical)
             else:
-                self.scrollRequest.emit(ev.delta(), Qt.Horizontal)
+                self.scrollRequest.emit(self.id, ev.delta(), Qt.Horizontal)
         ev.accept()
 
     def keyPressEvent(self, ev):
         key = ev.key()
         if key == Qt.Key_Escape and self.current:
             self.current = None
-            self.drawingPolygon.emit(False)
+            self.drawingPolygon.emit(self.id, False)
             self.update()
         elif key == Qt.Key_Return and self.canCloseShape():
             self.finalise()
@@ -584,7 +586,7 @@ class Canvas(QWidget):
         self.current = self.shapes.pop()
         self.current.setOpen()
         self.line.points = [self.current[-1], self.current[0]]
-        self.drawingPolygon.emit(True)
+        self.drawingPolygon.emit(self.id, True)
 
     def loadPixmap(self, pixmap):
         self.pixmap = pixmap
