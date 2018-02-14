@@ -121,7 +121,7 @@ class MainWindow(QMainWindow, WindowMixin):
             self.labelList[can] = QListWidget()
             self.labelList[can].itemActivated.connect(partial(self.labelSelectionChanged, can))
             self.labelList[can].itemSelectionChanged.connect(partial(self.labelSelectionChanged, can))
-            self.labelList[can].itemDoubleClicked.connect(self.editLabel)
+            self.labelList[can].itemDoubleClicked.connect(partial(self.editLabel, can))
             # Connect to itemChanged to detect checkbox changes.
             self.labelList[can].itemChanged.connect(self.labelItemChanged)
 
