@@ -48,7 +48,7 @@ class Canvas(QWidget):
     shapeMoved = pyqtSignal()
     drawingPolygon = pyqtSignal(int, bool)
 
-    CREATE, EDIT = 0, 1
+    CREATE, EDIT, MATCH = 0, 1, 2
 
     epsilon = 11.0
 
@@ -99,9 +99,15 @@ class Canvas(QWidget):
     def editing(self):
         return self.mode == self.EDIT
 
-    def setEditing(self, value=True):
-        self.mode = self.EDIT if value else self.CREATE
-        if not value: # Create
+    # def setEditing(self, value=True):
+    #     self.mode = self.EDIT if value else self.CREATE
+    #     if not value: # Create
+    #         self.unHighlight()
+    #         self.deSelectShape()
+
+    def setEditing(self, mode):
+        self.mode = mode
+        if mode == self.CREATE or mode == self.MATCH: # Create
             self.unHighlight()
             self.deSelectShape()
 
