@@ -61,9 +61,9 @@ numCanvas = 2
 # - self.image - done
 # - self.output - done
 # - self.labelFile - done
-# - self.labelList
+# - self.labelList - done
 # - self.imageData - done
-# - self.canvas
+# - self.canvas - done
 
 # - [high] Automatically add file suffix when saving.
 # - [high] Add polygon movement with arrow keys
@@ -115,6 +115,8 @@ class MainWindow(QMainWindow, WindowMixin):
         # Main widgets and related state.
         self.labelDialog = LabelDialog(parent=self)
 
+        listLayout = QVBoxLayout()
+        listLayout.setContentsMargins(0, 0, 0, 0)
         self.labelList = [None] * numCanvas
         self.itemsToShapes = [[]] * numCanvas
         for can in range(numCanvas):
@@ -123,17 +125,15 @@ class MainWindow(QMainWindow, WindowMixin):
             self.labelList[can].itemSelectionChanged.connect(partial(self.labelSelectionChanged, can))
             self.labelList[can].itemDoubleClicked.connect(partial(self.editLabel, can))
             # Connect to itemChanged to detect checkbox changes.
-            self.labelList[can].itemChanged.connect(self.labelItemChanged)
+            self.labelList[can].itemChanged.connect(partial(self.labelItemChanged, can))
+            listLayout.addWidget(self.labelList[can])
 
-        listLayout = QVBoxLayout()
-        listLayout.setContentsMargins(0, 0, 0, 0)
-        listLayout.addWidget(self.labelList)
         self.editButton = QToolButton()
         self.editButton.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.labelListContainer = QWidget()
         self.labelListContainer.setLayout(listLayout)
-        listLayout.addWidget(self.editButton)#, 0, Qt.AlignCenter)
-        listLayout.addWidget(self.labelList)
+        # listLayout.addWidget(self.editButton)#, 0, Qt.AlignCenter)
+        # listLayout.addWidget(self.labelList)
 
 
         self.dock = QDockWidget('Polygon Labels', self)
@@ -156,11 +156,11 @@ class MainWindow(QMainWindow, WindowMixin):
                 Qt.Vertical: scroll[can].verticalScrollBar(),
                 Qt.Horizontal: scroll[can].horizontalScrollBar()
                 }
-            self.canvas[can].scrollRequest.connect(self.scrollRequest)
+            self.canvas[can].scrollRequest.connect(partial(self.scrollRequest, can))
 
-            self.canvas[can].newShape.connect(self.newShape)
+            self.canvas[can].newShape.connect(partial(self.newShape, can))
             self.canvas[can].shapeMoved.connect(self.setDirty)
-            self.canvas[can].selectionChanged.connect(self.shapeSelectionChanged)
+            self.canvas[can].selectionChanged.connect(partial(self.shapeSelectionChanged, can))
             self.canvas[can].drawingPolygon.connect(self.toggleDrawingSensitive)
         # self.canvas = Canvas()
         # self.canvas.zoomRequest.connect(self.zoomRequest)
@@ -234,20 +234,22 @@ class MainWindow(QMainWindow, WindowMixin):
 
         create = action('Create\nPolygo&n', self.createShape,
                 'Ctrl+N', 'new', 'Draw a new polygon', enabled=False)
-        delete = action('Delete\nPolygon', self.deleteSelectedShape,
+        #FIXME: adapt for two canvases
+        delete = action('Delete\nPolygon', partial(self.deleteSelectedShape, 0),
                 'Delete', 'delete', 'Delete', enabled=False)
-        copy = action('&Duplicate\nPolygon', self.copySelectedShape,
+        #FIXME: adapt for two canvases
+        copy = action('&Duplicate\nPolygon', partial(self.copySelectedShape, 0),
                 'Ctrl+D', 'copy', 'Create a duplicate of the selected polygon',
                 enabled=False)
 
         advancedMode = action('&Advanced Mode', self.toggleAdvancedMode,
                 'Ctrl+Shift+A', 'expert', 'Switch to advanced mode',
                 checkable=True)
-
-        hideAll = action('&Hide\nPolygons', partial(self.togglePolygons, False),
+        #FIXME: adapt for two canvases
+        hideAll = action('&Hide\nPolygons', partial(self.togglePolygons, 0, False),
                 'Ctrl+H', 'hide', 'Hide all polygons',
                 enabled=False)
-        showAll = action('&Show\nPolygons', partial(self.togglePolygons, True),
+        showAll = action('&Show\nPolygons', partial(self.togglePolygons, 0, True),
                 'Ctrl+A', 'hide', 'Show all polygons',
                 enabled=False)
 
@@ -284,7 +286,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.MANUAL_ZOOM: lambda: 1,
         }
 
-        edit = action('&Edit Label', self.editLabel,
+        #FIXME: adapt for two canvases
+        edit = action('&Edit Label', partial(self.editLabel, 0),
                 'Ctrl+E', 'edit', 'Modify the label of the selected polygon',
                 enabled=False)
         self.editButton.setDefaultAction(edit)
@@ -303,8 +306,9 @@ class MainWindow(QMainWindow, WindowMixin):
         # Lavel list context menu.
         labelMenu = QMenu()
         addActions(labelMenu, (edit, delete))
-        self.labelList.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.labelList.customContextMenuRequested.connect(self.popLabelListMenu)
+        for can in range(numCanvas):
+            self.labelList[can].setContextMenuPolicy(Qt.CustomContextMenu)
+            self.labelList[can].customContextMenuRequested.connect(partial(self.popLabelListMenu, can))
 
         # Store actions for further handling.
         self.actions = struct(save=save, saveAs=saveAs, open=open, close=close,
@@ -347,8 +351,8 @@ class MainWindow(QMainWindow, WindowMixin):
             # Custom context menu for the canvas widget:
             addActions(self.canvas[can].menus[0], self.actions.beginnerContext)
             addActions(self.canvas[can].menus[1], (
-                action('&Copy here', self.copyShape),
-                action('&Move here', self.moveShape)))
+                action('&Copy here', partial(self.copyShape, can)),
+                action('&Move here', partial(self.moveShape, can))))
 
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
@@ -478,17 +482,18 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def resetState(self):
         self.itemsToShapes = [[]] * numCanvas
-        self.labelList.clear()
         self.filename = [None] * numCanvas
         # self.imageData = None
         self.imageData = [None] * numCanvas
         # self.labelFile = None
         self.labelFile = [None] * numCanvas
         for can in range(numCanvas):
+            self.labelList[can].clear()
             self.canvas[can].resetState()
 
-    def currentItem(self):
-        items = self.labelList.selectedItems()
+
+    def currentItem(self, canvas):
+        items = self.labelList[canvas].selectedItems()
         if items:
             return items[0]
         return None
@@ -555,13 +560,14 @@ class MainWindow(QMainWindow, WindowMixin):
             action.triggered.connect(partial(self.loadRecent, 0, f))
             menu.addAction(action)
 
-    def popLabelListMenu(self, point):
-        self.menus.labelList.exec_(self.labelList.mapToGlobal(point))
+    def popLabelListMenu(self, canvas, point):
+        self.menus.labelList.exec_(self.labelList[canvas].mapToGlobal(point))
 
+    #FIXME: adapt for two canvases
     def editLabel(self, canvas, item=None):
         if not self.canvas[canvas].editing():
             return
-        item = item if item else self.currentItem()
+        item = item if item else self.currentItem(canvas)
         text = self.labelDialog.popUp(item.text())
         if text is not None:
             item.setText(text)
@@ -579,7 +585,7 @@ class MainWindow(QMainWindow, WindowMixin):
                         break
                 item.setSelected(True)
             else:
-                self.labelList.clearSelection()
+                self.labelList[canvas].clearSelection()
         self.actions.delete.setEnabled(selected)
         self.actions.copy.setEnabled(selected)
         self.actions.edit.setEnabled(selected)
@@ -591,7 +597,7 @@ class MainWindow(QMainWindow, WindowMixin):
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
         item.setCheckState(Qt.Checked)
         self.itemsToShapes[canvas].append((item, shape))
-        self.labelList.addItem(item)
+        self.labelList[canvas].addItem(item)
         for action in self.actions.onShapesPresent:
             action.setEnabled(True)
 
@@ -600,7 +606,7 @@ class MainWindow(QMainWindow, WindowMixin):
             if shape_ == shape:
                 break
         self.itemsToShapes[canvas].pop(index)
-        self.labelList.takeItem(self.labelList.row(item))
+        self.labelList[canvas].takeItem(self.labelList[canvas].row(item))
 
     def loadLabels(self, canvas, shapes):
         s = []
@@ -617,7 +623,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 shape.fill_color = QColor(*fill_color)
         self.canvas[canvas].loadShapes(s)
 
-    def saveLabels(self, canvas, filename, canvas):
+    def saveLabels(self, canvas, filename):
         lf = LabelFile()
         def format_shape(s):
             return dict(label=str(s.label),
@@ -639,14 +645,13 @@ class MainWindow(QMainWindow, WindowMixin):
                     '<b>%s</b>' % e)
             return False
 
-    #FIXME: make the abstraction for two canvases
     def copySelectedShape(self, canvas):
         self.addLabel(canvas, self.canvas[canvas].copySelectedShape())
         #fix copy and delete
         self.shapeSelectionChanged(canvas, True)
 
     def labelSelectionChanged(self, canvas):
-        item = self.currentItem()
+        item = self.currentItem(canvas)
         if item and self.canvas[canvas].editing():
             self._noSelectionSlot = True
             for item_, shape in self.itemsToShapes[canvas]:
@@ -683,7 +688,6 @@ class MainWindow(QMainWindow, WindowMixin):
         else:
             self.canvas[canvas].undoLastLine()
 
-    # CLEAN!
     def scrollRequest(self, canvas, delta, orientation):
         units = - delta * 0.1 # natural scroll
         bar = self.scrollBars[canvas][orientation]
@@ -769,7 +773,7 @@ class MainWindow(QMainWindow, WindowMixin):
             self.filename[canvas] = filename
             self.canvas[canvas].loadPixmap(QPixmap.fromImage(image))
             if self.labelFile[canvas]:
-                self.loadLabels(self.labelFile[canvas].shapes)
+                self.loadLabels(canvas, self.labelFile[canvas].shapes)
             self.setClean()
             self.canvas[canvas].setEnabled(True)
             self.adjustScale(initial=True)
@@ -779,13 +783,15 @@ class MainWindow(QMainWindow, WindowMixin):
             return True
         return False
 
-    def resizeEvent(self, canvas, event):
-        if self.canvas and not self.image[canvas].isNull()\
-           and self.zoomMode != self.MANUAL_ZOOM:
-            self.adjustScale()
+    def resizeEvent(self, event):
+        for can in range(numCanvas):
+            if self.canvas[can] and not self.image[can].isNull()\
+               and self.zoomMode != self.MANUAL_ZOOM:
+                self.adjustScale()
         super(MainWindow, self).resizeEvent(event)
 
-    def paintCanvas(self, canvas):
+    #FIXME
+    def paintCanvas(self, canvas=0):
         assert not self.image[canvas].isNull(), "cannot paint null image"
         self.canvas[canvas].scale = 0.01 * self.zoomWidget.value()
         self.canvas[canvas].adjustSize()
@@ -834,7 +840,6 @@ class MainWindow(QMainWindow, WindowMixin):
         if self.mayContinue():
             self.loadFile(filename, canvas)
 
-    # CLEAN
     def openFile(self, _value=False):
         if not self.mayContinue():
             return
@@ -853,31 +858,33 @@ class MainWindow(QMainWindow, WindowMixin):
             if filename:
                 self.loadFile(filename, can)
 
-    def saveFile(self, canvas, _value=False):
-        assert not self.image[canvas].isNull(), "cannot save empty image"
-        if self.hasLabels():
-            if self.labelFile[canvas]:
-                self._saveFile(self.filename[canvas])
-            elif self.output[canvas]:
-                self._saveFile(self.output[canvas])
-            else:
-                self._saveFile(self.saveFileDialog())
+    def saveFile(self, _value=False):
+        for can in range(numCanvas):
+            assert not self.image[can].isNull(), "cannot save empty image"
+            if self.hasLabels(can):
+                if self.labelFile[can]:
+                    self._saveFile(can, self.filename[can])
+                elif self.output[canvas]:
+                    self._saveFile(can, self.output[can])
+                else:
+                    self._saveFile(can, self.saveFileDialog(can))
 
     def saveFileAs(self, _value=False):
-        assert not self.image[canvas].isNull(), "cannot save empty image"
-        if self.hasLabels():
-            self._saveFile(self.saveFileDialog())
+        for can in range(numCanvas):
+            assert not self.image[can].isNull(), "cannot save empty image"
+            if self.hasLabels(can):
+                self._saveFile(can, self.saveFileDialog(can))
 
     def saveFileDialog(self, canvas):
         caption = '%s - Choose File' % __appname__
         filters = 'Label files (*%s)' % LabelFile.suffix
-        dlg = QFileDialog(self, caption, self.currentPath(), filters)
+        dlg = QFileDialog(self, caption, self.currentPath(canvas), filters)
         dlg.setDefaultSuffix(LabelFile.suffix[1:])
         dlg.setAcceptMode(QFileDialog.AcceptSave)
         dlg.setOption(QFileDialog.DontConfirmOverwrite, False)
         dlg.setOption(QFileDialog.DontUseNativeDialog, False)
         basename = os.path.splitext(self.filename[canvas])[0]
-        default_labelfile_name = os.path.join(self.currentPath(),
+        default_labelfile_name = os.path.join(self.currentPath(canvas),
                                               basename + LabelFile.suffix)
         filename = dlg.getSaveFileName(
             self, 'Choose File', default_labelfile_name,
@@ -887,8 +894,8 @@ class MainWindow(QMainWindow, WindowMixin):
         filename = str(filename)
         return filename
 
-    def _saveFile(self, filename):
-        if filename and self.saveLabels(filename):
+    def _saveFile(self, canvas, filename):
+        if filename and self.saveLabels(canvas, filename):
             self.addRecentFile(filename)
             self.setClean()
             if self.labeling_once:
@@ -900,7 +907,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.resetState()
         self.setClean()
         self.toggleActions(False)
-        self.canvas.setEnabled(False)
+        for can in range(numCanvas):
+            self.canvas[can].setEnabled(False)
         self.actions.saveAs.setEnabled(False)
 
     # Message Dialogs. #
@@ -933,7 +941,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.lineColor = color
             # Change the color for all shape lines:
             Shape.line_color = self.lineColor
-            self.canvas.update()
+            for can in range(numCanvas):
+                self.canvas[can].update()
             self.setDirty()
 
     def chooseColor2(self):
@@ -942,7 +951,8 @@ class MainWindow(QMainWindow, WindowMixin):
        if color:
             self.fillColor = color
             Shape.fill_color = self.fillColor
-            self.canvas.update()
+            for can in range(numCanvas):
+                self.canvas[can].update()
             self.setDirty()
 
     def deleteSelectedShape(self, canvas):
@@ -960,24 +970,26 @@ class MainWindow(QMainWindow, WindowMixin):
                 default=DEFAULT_LINE_COLOR)
         if color:
             self.canvas.selectedShape.line_color = color
-            self.canvas.update()
+            for can in range(numCanvas):
+                self.canvas[can].update()
             self.setDirty()
 
     def chshapeFillColor(self):
         color = self.colorDialog.getColor(self.fillColor, 'Choose fill color',
                 default=DEFAULT_FILL_COLOR)
         if color:
-            self.canvas.selectedShape.fill_color = color
-            self.canvas.update()
+            for can in range(numCanvas):
+                self.canvas[can].selectedShape.fill_color = color
+                self.canvas[can].update()
             self.setDirty()
 
-    def copyShape(self):
-        self.canvas.endMove(copy=True)
-        self.addLabel(canvas, self.canvas.selectedShape)
+    def copyShape(self, canvas):
+        self.canvas[canvas].endMove(copy=True)
+        self.addLabel(canvas, self.canvas[canvas].selectedShape)
         self.setDirty()
 
-    def moveShape(self):
-        self.canvas.endMove(copy=False)
+    def moveShape(self, canvas):
+        self.canvas[canvas].endMove(copy=False)
         self.setDirty()
 
 
