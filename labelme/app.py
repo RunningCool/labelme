@@ -107,6 +107,12 @@ class MainWindow(QMainWindow, WindowMixin):
         # Whether we need to save or not.
         self.dirty = False
 
+        # Initalize states
+        self.itemsToShapes = [[]] * numCanvas
+        self.filename = [None] * numCanvas
+        self.imageData = [None] * numCanvas
+        self.labelFile = [None] * numCanvas
+
         self._noSelectionSlot = False
         self._beginner = True
         self.screencastViewer = "firefox"
@@ -156,45 +162,12 @@ class MainWindow(QMainWindow, WindowMixin):
                 Qt.Vertical: scroll[can].verticalScrollBar(),
                 Qt.Horizontal: scroll[can].horizontalScrollBar()
                 }
-            self.canvas[can].scrollRequest.connect(partial(self.scrollRequest, can))
+            self.canvas[can].scrollRequest.connect(self.scrollRequest)
 
             self.canvas[can].newShape.connect(partial(self.newShape, can))
             self.canvas[can].shapeMoved.connect(self.setDirty)
             self.canvas[can].selectionChanged.connect(partial(self.shapeSelectionChanged, can))
             self.canvas[can].drawingPolygon.connect(self.toggleDrawingSensitive)
-        # self.canvas = Canvas()
-        # self.canvas.zoomRequest.connect(self.zoomRequest)
-
-        # self.canvas2 = Canvas()
-        # self.canvas2.zoomRequest.connect(self.zoomRequest)
-
-        # scroll = QScrollArea()
-        # scroll.setWidget(self.canvas)
-        # scroll.setWidgetResizable(True)
-        # self.scrollBars = {
-        #     Qt.Vertical: scroll.verticalScrollBar(),
-        #     Qt.Horizontal: scroll.horizontalScrollBar()
-        #     }
-        # self.canvas.scrollRequest.connect(self.scrollRequest)
-
-        # scroll2 = QScrollArea()
-        # scroll2.setWidget(self.canvas2)
-        # scroll2.setWidgetResizable(True)
-        # self.scrollBars2 = {
-        #     Qt.Vertical: scroll2.verticalScrollBar(),
-        #     Qt.Horizontal: scroll2.horizontalScrollBar()
-        #     }
-        # self.canvas2.scrollRequest.connect(self.scrollRequest)
-
-        # self.canvas.newShape.connect(self.newShape)
-        # self.canvas.shapeMoved.connect(self.setDirty)
-        # self.canvas.selectionChanged.connect(self.shapeSelectionChanged)
-        # self.canvas.drawingPolygon.connect(self.toggleDrawingSensitive)
-        #
-        # self.canvas2.newShape.connect(self.newShape)
-        # self.canvas2.shapeMoved.connect(self.setDirty)
-        # self.canvas2.selectionChanged.connect(self.shapeSelectionChanged)
-        # self.canvas2.drawingPolygon.connect(self.toggleDrawingSensitive)
 
         self.groupBox = QGroupBox()
         self.groupBoxLayout = QHBoxLayout()
@@ -231,7 +204,8 @@ class MainWindow(QMainWindow, WindowMixin):
                 'Ctrl+N', 'new', 'Start drawing polygons', enabled=False)
         editMode = action('&Edit\nPolygons', self.setEditMode,
                 'Ctrl+J', 'edit', 'Move and edit polygons', enabled=False)
-
+        matchMode = action('&Match\nLines', self.setMatchMode,
+                'Ctrl+M', 'edit', 'Match lines between two views', enabled=False)
         create = action('Create\nPolygo&n', self.createShape,
                 'Ctrl+N', 'new', 'Draw a new polygon', enabled=False)
         #FIXME: adapt for two canvases
@@ -245,11 +219,10 @@ class MainWindow(QMainWindow, WindowMixin):
         advancedMode = action('&Advanced Mode', self.toggleAdvancedMode,
                 'Ctrl+Shift+A', 'expert', 'Switch to advanced mode',
                 checkable=True)
-        #FIXME: adapt for two canvases
-        hideAll = action('&Hide\nPolygons', partial(self.togglePolygons, 0, False),
+        hideAll = action('&Hide\nPolygons', partial(self.togglePolygons, False),
                 'Ctrl+H', 'hide', 'Hide all polygons',
                 enabled=False)
-        showAll = action('&Show\nPolygons', partial(self.togglePolygons, 0, True),
+        showAll = action('&Show\nPolygons', partial(self.togglePolygons, True),
                 'Ctrl+A', 'hide', 'Show all polygons',
                 enabled=False)
 
@@ -480,17 +453,26 @@ class MainWindow(QMainWindow, WindowMixin):
     def status(self, message, delay=5000):
         self.statusBar().showMessage(message, delay)
 
-    def resetState(self):
-        self.itemsToShapes = [[]] * numCanvas
-        self.filename = [None] * numCanvas
-        # self.imageData = None
-        self.imageData = [None] * numCanvas
-        # self.labelFile = None
-        self.labelFile = [None] * numCanvas
-        for can in range(numCanvas):
-            self.labelList[can].clear()
-            self.canvas[can].resetState()
+    # def resetState(self):
+    #     self.itemsToShapes = [[]] * numCanvas
+    #     self.filename = [None] * numCanvas
+    #     # self.imageData = None
+    #     self.imageData = [None] * numCanvas
+    #     # self.labelFile = None
+    #     self.labelFile = [None] * numCanvas
+    #     for can in range(numCanvas):
+    #         self.labelList[can].clear()
+    #         self.canvas[can].resetState()
 
+    def resetState(self, canvas):
+        self.itemsToShapes[canvas] = []
+        self.filename[canvas] = None
+        # self.imageData = None
+        self.imageData[canvas] = None
+        # self.labelFile = None
+        self.labelFile[canvas] = None
+        self.labelList[canvas].clear()
+        self.canvas[canvas].resetState()
 
     def currentItem(self, canvas):
         items = self.labelList[canvas].selectedItems()
@@ -544,6 +526,13 @@ class MainWindow(QMainWindow, WindowMixin):
     def setEditMode(self):
         assert self.advanced()
         self.toggleDrawMode(True)
+
+    def toggleMode(self, mode):
+        for can in range(numCanvas):
+            self.canvas[can].setEditing(mode != 0)
+        self.actions.createMode.setEnabled(mode != 0)
+        self.actions.editMode.setEnabled(mode != 1)
+        self.actions.matchMode.setEnabled(mode != 2)
 
     # FIXME:adapt for two filenames
     def updateFileMenu(self):
@@ -689,6 +678,9 @@ class MainWindow(QMainWindow, WindowMixin):
             self.canvas[canvas].undoLastLine()
 
     def scrollRequest(self, canvas, delta, orientation):
+        print(canvas)
+        print(delta)
+        print(orientation)
         units = - delta * 0.1 # natural scroll
         bar = self.scrollBars[canvas][orientation]
         bar.setValue(bar.value() + bar.singleStep() * units)
@@ -719,13 +711,14 @@ class MainWindow(QMainWindow, WindowMixin):
         self.zoomMode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
         self.adjustScale()
 
-    def togglePolygons(self, canvas, value):
-        for item, shape in self.itemsToShapes[canvas]:
-            item.setCheckState(Qt.Checked if value else Qt.Unchecked)
+    def togglePolygons(self, value):
+        for can in range(numCanvas):
+            for item, shape in self.itemsToShapes[can]:
+                item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
     def loadFile(self, canvas, filename=None):
         """Load the specified file, or the last opened file if None."""
-        self.resetState()
+        self.resetState(canvas)
         self.canvas[canvas].setEnabled(False)
         if filename is None:
             filename = self.settings.get('filename', '')
@@ -772,6 +765,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.image[canvas] = image
             self.filename[canvas] = filename
             self.canvas[canvas].loadPixmap(QPixmap.fromImage(image))
+            print("[DEBUG] loaded pixmap for canvas: {}".format(canvas))
+            print(self.canvas[canvas].pixmap is None)
             if self.labelFile[canvas]:
                 self.loadLabels(canvas, self.labelFile[canvas].shapes)
             self.setClean()
@@ -790,12 +785,15 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.adjustScale()
         super(MainWindow, self).resizeEvent(event)
 
-    #FIXME
-    def paintCanvas(self, canvas=0):
-        assert not self.image[canvas].isNull(), "cannot paint null image"
-        self.canvas[canvas].scale = 0.01 * self.zoomWidget.value()
-        self.canvas[canvas].adjustSize()
-        self.canvas[canvas].update()
+    def paintCanvas(self):
+        for can in range(numCanvas):
+            # assert not self.image[can].isNull(), "cannot paint null image"
+            if self.image[can].isNull():
+                print("canvas {}:cannot paint null image".format(can))
+                continue
+            self.canvas[can].scale = 0.01 * self.zoomWidget.value()
+            self.canvas[can].adjustSize()
+            self.canvas[can].update()
 
     def adjustScale(self, initial=False):
         value = self.scalers[self.FIT_WINDOW if initial else self.zoomMode]()
@@ -856,7 +854,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 filename, _ = filename
             filename = str(filename)
             if filename:
-                self.loadFile(filename, can)
+                self.loadFile(can, filename)
 
     def saveFile(self, _value=False):
         for can in range(numCanvas):
@@ -904,10 +902,10 @@ class MainWindow(QMainWindow, WindowMixin):
     def closeFile(self, _value=False):
         if not self.mayContinue():
             return
-        self.resetState()
         self.setClean()
         self.toggleActions(False)
         for can in range(numCanvas):
+            self.resetState(can)
             self.canvas[can].setEnabled(False)
         self.actions.saveAs.setEnabled(False)
 

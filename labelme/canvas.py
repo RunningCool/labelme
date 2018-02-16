@@ -52,10 +52,10 @@ class Canvas(QWidget):
 
     epsilon = 11.0
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, id, *args, **kwargs):
         super(Canvas, self).__init__(*args, **kwargs)
         # Initialise local state.
-        self.id = kwargs['id']
+        self.id = id
         assert(self.id >= 0)
         self.mode = self.EDIT
         self.shapes = []
@@ -124,7 +124,6 @@ class Canvas(QWidget):
 
         # Polygon drawing.
         if self.drawing():
-            print("drawing")
             self.overrideCursor(CURSOR_DRAW)
             if self.current:
                 color = self.lineColor
