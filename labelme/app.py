@@ -80,6 +80,7 @@ numCanvas = 2
 ### Utility functions and classes.
 
 class WindowMixin(object):
+    CREATE, EDIT, MATCH = 0, 1, 2
     def menu(self, title, actions=None):
         menu = self.menuBar().addMenu(title)
         if actions:
@@ -287,7 +288,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions = struct(save=save, saveAs=saveAs, open=open, close=close,
                 lineColor=color1, fillColor=color2,
                 create=create, delete=delete, edit=edit, copy=copy,
-                createMode=createMode, editMode=editMode, advancedMode=advancedMode,
+                createMode=createMode, editMode=editMode,
+                matchMode=matchMode, advancedMode=advancedMode,
                 shapeLineColor=shapeLineColor, shapeFillColor=shapeFillColor,
                 zoom=zoom, zoomIn=zoomIn, zoomOut=zoomOut, zoomOrg=zoomOrg,
                 fitWindow=fitWindow, fitWidth=fitWidth,
@@ -296,9 +298,9 @@ class MainWindow(QMainWindow, WindowMixin):
                 beginner=(), advanced=(),
                 editMenu=(edit, copy, delete, None, color1, color2),
                 beginnerContext=(create, edit, copy, delete),
-                advancedContext=(createMode, editMode, edit, copy,
+                advancedContext=(createMode, editMode, matchMode, edit, copy,
                     delete, shapeLineColor, shapeFillColor),
-                onLoadActive=(close, create, createMode, editMode),
+                onLoadActive=(close, create, createMode, editMode, matchMode),
                 onShapesPresent=(saveAs, hideAll, showAll))
 
         self.menus = struct(
@@ -334,7 +336,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.actions.advanced = (
             open, save, None,
-            createMode, editMode, None,
+            createMode, editMode, matchMode, None,
             hideAll, showAll)
 
         self.statusBar().showMessage('%s started.' % __appname__)
@@ -395,12 +397,13 @@ class MainWindow(QMainWindow, WindowMixin):
     def toggleAdvancedMode(self, value=True):
         self._beginner = not value
         for can in range(numCanvas):
-            self.canvas[can].setEditing(True)
+            self.canvas[can].setEditing(self.EDIT)
         self.populateModeActions()
         self.editButton.setVisible(not value)
         if value:
             self.actions.createMode.setEnabled(True)
             self.actions.editMode.setEnabled(False)
+            self.actions.matchMode.setEnabled(False)
             self.dock.setFeatures(self.dock.features() | self.dockFeatures)
         else:
             self.dock.setFeatures(self.dock.features() ^ self.dockFeatures)
@@ -417,7 +420,7 @@ class MainWindow(QMainWindow, WindowMixin):
             addActions(self.canvas[can].menus[0], menu)
         self.menus.edit.clear()
         actions = (self.actions.create,) if self.beginner()\
-                else (self.actions.createMode, self.actions.editMode)
+                else (self.actions.createMode, self.actions.editMode, self.actions.matchMode)
         addActions(self.menus.edit, actions + self.actions.editMenu)
 
     def setBeginner(self):
@@ -500,7 +503,7 @@ class MainWindow(QMainWindow, WindowMixin):
     def createShape(self):
         assert self.beginner()
         for can in range(numCanvas):
-            self.canvas[can].setEditing(False)
+            self.canvas[can].setEditing(self.CREATE)
         self.actions.create.setEnabled(False)
 
     def toggleDrawingSensitive(self, drawing=True):
@@ -509,30 +512,36 @@ class MainWindow(QMainWindow, WindowMixin):
         if not drawing and self.beginner():
             # Cancel creation.
             for can in range(numCanvas):
-                self.canvas[can].setEditing(True)
+                self.canvas[can].setEditing(self.EDIT)
                 self.canvas[can].restoreCursor()
             self.actions.create.setEnabled(True)
 
-    def toggleDrawMode(self, edit=True):
-        for can in range(numCanvas):
-            self.canvas[can].setEditing(edit)
-        self.actions.createMode.setEnabled(edit)
-        self.actions.editMode.setEnabled(not edit)
+    # def toggleDrawMode(self, edit=True):
+    #     for can in range(numCanvas):
+    #         self.canvas[can].setEditing(edit)
+    #     self.actions.createMode.setEnabled(edit)
+    #     self.actions.editMode.setEnabled(not edit)
 
     def setCreateMode(self):
         assert self.advanced()
-        self.toggleDrawMode(False)
+        # self.toggleDrawMode(False)
+        self.toggleMode(self.CREATE)
 
     def setEditMode(self):
         assert self.advanced()
-        self.toggleDrawMode(True)
+        # self.toggleDrawMode(True)
+        self.toggleMode(self.EDIT)
+
+    def setMatchMode(self):
+        assert self.advanced()
+        self.toggleMode(self.MATCH)
 
     def toggleMode(self, mode):
         for can in range(numCanvas):
-            self.canvas[can].setEditing(mode != 0)
-        self.actions.createMode.setEnabled(mode != 0)
-        self.actions.editMode.setEnabled(mode != 1)
-        self.actions.matchMode.setEnabled(mode != 2)
+            self.canvas[can].setEditing(mode)
+        self.actions.createMode.setEnabled(mode is not self.CREATE)
+        self.actions.editMode.setEnabled(mode is not self.EDIT)
+        self.actions.matchMode.setEnabled(mode is not self.MATCH)
 
     # FIXME:adapt for two filenames
     def updateFileMenu(self):
@@ -669,7 +678,7 @@ class MainWindow(QMainWindow, WindowMixin):
         if text is not None:
             self.addLabel(canvas, self.canvas[canvas].setLastLabel(text))
             if self.beginner(): # Switch to edit mode.
-                self.canvas[canvas].setEditing(True)
+                self.canvas[canvas].setEditing(self.EDIT)
                 self.actions.create.setEnabled(True)
             else:
                 self.actions.editMode.setEnabled(True)

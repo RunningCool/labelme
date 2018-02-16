@@ -107,7 +107,7 @@ class Canvas(QWidget):
 
     def setEditing(self, mode):
         self.mode = mode
-        if mode == self.CREATE or mode == self.MATCH: # Create
+        if mode is self.CREATE or mode is self.MATCH: # Create
             self.unHighlight()
             self.deSelectShape()
 
