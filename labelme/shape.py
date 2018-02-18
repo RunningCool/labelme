@@ -79,7 +79,7 @@ class Shape(object):
 
     def close(self):
         assert len(self.points) >= 2
-        print("[DEBUG] Closeing shape with {} points".format(len(self.points)))
+        # print("[DEBUG] Closeing shape with {} points".format(len(self.points)))
         self._closed = True
 
     def addPoint(self, point):
