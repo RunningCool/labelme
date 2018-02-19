@@ -687,9 +687,6 @@ class MainWindow(QMainWindow, WindowMixin):
             self.canvas[canvas].undoLastLine()
 
     def scrollRequest(self, canvas, delta, orientation):
-        print(canvas)
-        print(delta)
-        print(orientation)
         units = - delta * 0.1 # natural scroll
         bar = self.scrollBars[canvas][orientation]
         bar.setValue(bar.value() + bar.singleStep() * units)

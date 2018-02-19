@@ -68,9 +68,12 @@ class Shape(object):
             self.NEAR_VERTEX: (4, self.P_ROUND),
             self.MOVE_VERTEX: (1.5, self.P_SQUARE),
             }
+        self._highlightEdgeIndex = None
+        self._selectedEdgeIndex = None
 
         self._closed = False
 
+        self.correspondence = {}
         if line_color is not None:
             # Override the class line_color attribute
             # with an object attribute. Currently this
@@ -109,12 +112,15 @@ class Shape(object):
         if self.points:
             color = self.select_line_color if self.selected else self.line_color
             pen = QPen(color)
+            highlight_pen = QPen(self.select_line_color)
             # Try using integer sizes for smoother drawing(?)
             pen.setWidth(max(1, int(round(2.0 / self.scale))))
+            highlight_pen.setWidth(max(2, int(round(4.0 / self.scale))))
             painter.setPen(pen)
 
             line_path = QPainterPath()
             vrtx_path = QPainterPath()
+            line_highlightpath = QPainterPath()
 
             line_path.moveTo(self.points[0])
             # Uncommenting the following line will draw 2 paths
@@ -122,9 +128,19 @@ class Shape(object):
             # may be desirable.
             #self.drawVertex(vrtx_path, 0)
 
+            # for i, p in enumerate(self.points):
+            #     line_path.lineTo(p)
+            #     self.drawVertex(vrtx_path, i)
             for i, p in enumerate(self.points):
-                line_path.lineTo(p)
                 self.drawVertex(vrtx_path, i)
+                if i == 0: continue
+                subp = QPainterPath(self.points[i-1])
+                subp.lineTo(self.points[i])
+                if self._highlightEdgeIndex == i-1 or self._selectedEdgeIndex == i-1:
+                    line_highlightpath.addPath(subp)
+                else:
+                    line_path.addPath(subp)
+
             # if self.isClosed():
             #     line_path.lineTo(self.points[0])
 
@@ -134,6 +150,8 @@ class Shape(object):
             if self.fill:
                 color = self.select_fill_color if self.selected else self.fill_color
                 painter.fillPath(line_path, color)
+            painter.setPen(highlight_pen)
+            painter.drawPath(line_highlightpath)
 
     def drawVertex(self, path, i):
         d = self.point_size / self.scale
@@ -181,8 +199,15 @@ class Shape(object):
         self._highlightIndex = i
         self._highlightMode = action
 
+    def highlightEdge(self, i, select=False):
+        self._highlightEdgeIndex = i
+        if select:
+            self._selectedEdgeIndex = i
+
+
     def highlightClear(self):
         self._highlightIndex = None
+        self._highlightEdgeIndex = None
 
     def copy(self):
         shape = Shape("Copy of %s" % self.label )
