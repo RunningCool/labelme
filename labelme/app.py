@@ -114,7 +114,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.imageData = [None] * numCanvas
         self.labelFile = [None] * numCanvas
 
-        self._noSelectionSlot = False
+        self._noSelectionSlot = [False] * numCanvas
         self._beginner = True
         self.screencastViewer = "firefox"
         self.screencast = "screencast.ogv"
@@ -124,6 +124,13 @@ class MainWindow(QMainWindow, WindowMixin):
 
         listLayout = QVBoxLayout()
         listLayout.setContentsMargins(0, 0, 0, 0)
+        self.correspondenceList = QListWidget()
+        self.correspondenceList.setVisible(False)
+        # FIXME
+        self.correspondenceList.itemActivated.connect(self.correspondenceSelectionChanged)
+        self.correspondenceList.itemSelectionChanged.connect(self.correspondenceSelectionChanged)
+        # self.correspondenceList.itemDoubleClicked.connect
+
         self.labelList = [None] * numCanvas
         self.itemsToShapes = [[]] * numCanvas
         for can in range(numCanvas):
@@ -134,6 +141,8 @@ class MainWindow(QMainWindow, WindowMixin):
             # Connect to itemChanged to detect checkbox changes.
             self.labelList[can].itemChanged.connect(partial(self.labelItemChanged, can))
             listLayout.addWidget(self.labelList[can])
+
+        listLayout.addWidget(self.correspondenceList)
 
         self.editButton = QToolButton()
         self.editButton.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -167,13 +176,13 @@ class MainWindow(QMainWindow, WindowMixin):
 
             self.canvas[can].newShape.connect(partial(self.newShape, can))
             self.canvas[can].shapeMoved.connect(self.setDirty)
-            self.canvas[can].selectionChanged.connect(partial(self.shapeSelectionChanged, can))
+            self.canvas[can].selectionChanged.connect(self.shapeSelectionChanged)
             self.canvas[can].drawingPolygon.connect(self.toggleDrawingSensitive)
 
         self.groupBox = QGroupBox()
         self.groupBoxLayout = QHBoxLayout()
         self.groupBoxLayout.addWidget(scroll[0])
-        self.groupBoxLayout.addWidget(QPushButton("Correspond"))
+        # self.groupBoxLayout.addWidget(QPushButton("Correspond"))
         self.groupBoxLayout.addWidget(scroll[1])
         self.groupBox.setLayout(self.groupBoxLayout)
 
@@ -216,6 +225,10 @@ class MainWindow(QMainWindow, WindowMixin):
         copy = action('&Duplicate\nPolygon', partial(self.copySelectedShape, 0),
                 'Ctrl+D', 'copy', 'Create a duplicate of the selected polygon',
                 enabled=False)
+        match = action('&Correspond', self.createCorrespondence,
+                'Ctrl+C', 'new', 'Make a correspondence', enabled=False)
+        unmatch = action('&Uncorrespond', self.deleteCorrespondence,
+                'Ctrl+U', 'delete', 'Remove a correspondence', enabled=False)
 
         advancedMode = action('&Advanced Mode', self.toggleAdvancedMode,
                 'Ctrl+Shift+A', 'expert', 'Switch to advanced mode',
@@ -288,6 +301,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions = struct(save=save, saveAs=saveAs, open=open, close=close,
                 lineColor=color1, fillColor=color2,
                 create=create, delete=delete, edit=edit, copy=copy,
+                match=match, unmatch=unmatch,
                 createMode=createMode, editMode=editMode,
                 matchMode=matchMode, advancedMode=advancedMode,
                 shapeLineColor=shapeLineColor, shapeFillColor=shapeFillColor,
@@ -297,8 +311,8 @@ class MainWindow(QMainWindow, WindowMixin):
                 fileMenuActions=(open,save,saveAs,close,quit),
                 beginner=(), advanced=(),
                 editMenu=(edit, copy, delete, None, color1, color2),
-                beginnerContext=(create, edit, copy, delete),
-                advancedContext=(createMode, editMode, matchMode, edit, copy,
+                beginnerContext=(create, edit, copy, delete, match, unmatch),
+                advancedContext=(createMode, editMode, matchMode, match, unmatch, edit, copy,
                     delete, shapeLineColor, shapeFillColor),
                 onLoadActive=(close, create, createMode, editMode, matchMode),
                 onShapesPresent=(saveAs, hideAll, showAll))
@@ -332,11 +346,13 @@ class MainWindow(QMainWindow, WindowMixin):
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
             open, save, None, create, copy, delete, None,
+            match, unmatch, None,
             zoomIn, zoom, zoomOut, fitWindow, fitWidth)
 
         self.actions.advanced = (
             open, save, None,
             createMode, editMode, matchMode, None,
+            match, unmatch, None,
             hideAll, showAll)
 
         self.statusBar().showMessage('%s started.' % __appname__)
@@ -500,6 +516,22 @@ class MainWindow(QMainWindow, WindowMixin):
     def tutorial(self):
         subprocess.Popen([self.screencastViewer, self.screencast])
 
+    def createCorrespondence(self):
+        if self.canvas[0].selectedEdge is not None and \
+            self.canvas[1].selectedEdge is not None:
+            self.addCorrespondence(self.canvas[0].selectedShape, \
+                                    self.canvas[1].selectedShape, \
+                                    self.canvas[0].selectedEdge, \
+                                    self.canvas[1].selectedEdge)
+        else:
+            print('No selected Edge. Better check the button\'s setEnabled')
+
+    def deleteCorrespondence(self):
+        items = self.correspondenceList.selectedItems()
+        if items:
+            item = items[0]
+            self.remCorrespondence(item)
+
     def createShape(self):
         assert self.beginner()
         for can in range(numCanvas):
@@ -537,11 +569,15 @@ class MainWindow(QMainWindow, WindowMixin):
         self.toggleMode(self.MATCH)
 
     def toggleMode(self, mode):
+        print('mode changed to: {}'.format(mode))
         for can in range(numCanvas):
             self.canvas[can].setEditing(mode)
         self.actions.createMode.setEnabled(mode is not self.CREATE)
         self.actions.editMode.setEnabled(mode is not self.EDIT)
         self.actions.matchMode.setEnabled(mode is not self.MATCH)
+        self.actions.match.setEnabled(mode is self.MATCH)
+        self.actions.unmatch.setEnabled(mode is self.MATCH)
+        self.correspondenceList.setVisible(mode is self.MATCH)
 
     # FIXME:adapt for two filenames
     def updateFileMenu(self):
@@ -561,7 +597,6 @@ class MainWindow(QMainWindow, WindowMixin):
     def popLabelListMenu(self, canvas, point):
         self.menus.labelList.exec_(self.labelList[canvas].mapToGlobal(point))
 
-    #FIXME: adapt for two canvases
     def editLabel(self, canvas, item=None):
         if not self.canvas[canvas].editing():
             return
@@ -573,8 +608,9 @@ class MainWindow(QMainWindow, WindowMixin):
 
     # React to canvas signals.
     def shapeSelectionChanged(self, canvas, selected=False):
-        if self._noSelectionSlot:
-            self._noSelectionSlot = False
+        # print("shapeSelectionChanged triggered, selected={}".format(selected))
+        if self._noSelectionSlot[canvas]:
+            self._noSelectionSlot[canvas] = False
         else:
             shape = self.canvas[canvas].selectedShape
             if shape:
@@ -599,6 +635,34 @@ class MainWindow(QMainWindow, WindowMixin):
         for action in self.actions.onShapesPresent:
             action.setEnabled(True)
 
+    def addCorrespondence(self, shape1, shape2, edge1, edge2):
+        '''
+        1. check unique correspondence id
+        2. check existence of the same pair
+        '''
+        text = self.labelDialog.popUp()
+        items = self.correspondenceList.findItems(text, Qt.MatchExactly)
+        if len(items) > 0:
+            print('Correspondence named {} already exists'.format(text))
+            return
+        shape1.correspondence[text] = edge1
+        shape2.correspondence[text] = edge2
+        item = QListWidgetItem(text)
+        self.correspondenceList.addItem(item)
+
+    def remCorrespondence(self, item):
+        # items = self.correspondenceList.findItems(text, Qt.MatchExactly)
+        # assert(len(items) <= 1)
+        # if len(items) == 1:
+        #     item = items[0]
+        self.correspondenceList.takeItem(self.correspondenceList.row(item))
+        for can in range(numCanvas):
+            for shape in reversed([s for s in self.canvas[can].shapes]):
+                if shape.correspondence.pop(item.text(), None) is not None:
+                    break
+        # else:
+        #     print('No item named {}'.format(text))
+
     def remLabel(self, canvas, shape):
         for index, (item, shape_) in enumerate(self.itemsToShapes[canvas]):
             if shape_ == shape:
@@ -613,12 +677,19 @@ class MainWindow(QMainWindow, WindowMixin):
             for x, y in points:
                 shape.addPoint(QPointF(x, y))
             shape.close()
+
             s.append(shape)
             self.addLabel(canvas, shape)
             if line_color:
                 shape.line_color = QColor(*line_color)
             if fill_color:
                 shape.fill_color = QColor(*fill_color)
+            # shape.correspondence = correspondence
+            # for key in correspondence:
+            #     items = self.correspondenceList.findItems(key, Qt.MatchExactly)
+            #     if len(items) == 0:
+            #         item = QListWidgetItem(key)
+            #         self.correspondenceList.addItem(item)
         self.canvas[canvas].loadShapes(s)
 
     def saveLabels(self, canvas, filename):
@@ -631,6 +702,8 @@ class MainWindow(QMainWindow, WindowMixin):
                                 if s.fill_color != self.fillColor else None,
                         points=[(p.x(), p.y()) for p in s.points])
 
+# ,
+# correspondence=s.correspondence
         shapes = [format_shape(shape) for shape in self.canvas[canvas].shapes]
         try:
             lf.save(filename, shapes, str(self.filename[canvas]), self.imageData[canvas],
@@ -648,10 +721,19 @@ class MainWindow(QMainWindow, WindowMixin):
         #fix copy and delete
         self.shapeSelectionChanged(canvas, True)
 
+    def correspondenceSelectionChanged(self):
+        items = self.correspondenceList.selectedItems()
+        if items:
+            item = items[0]
+            for can in range(numCanvas):
+                shape, idLine = self.canvas[can].findEdgeByText(item.text())
+                assert(shape is not None)
+                self.canvas[can].selectShapeEdge(shape, idLine)
+
     def labelSelectionChanged(self, canvas):
         item = self.currentItem(canvas)
         if item and self.canvas[canvas].editing():
-            self._noSelectionSlot = True
+            self._noSelectionSlot[canvas] = True
             for item_, shape in self.itemsToShapes[canvas]:
                 if item_ == item:
                     break
@@ -827,7 +909,8 @@ class MainWindow(QMainWindow, WindowMixin):
         if not self.mayContinue():
             event.ignore()
         s = self.settings
-        s['filename'] = self.filename if self.filename[0] else ''
+        # s['filename'] = self.filename if self.filename[0] else ''
+        s['filename'] = self.filename
         s['window/size'] = self.size()
         s['window/position'] = self.pos()
         s['window/state'] = self.saveState()

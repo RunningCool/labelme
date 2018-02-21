@@ -117,9 +117,9 @@ class Canvas(QWidget):
 
     def setEditing(self, mode):
         self.mode = mode
-        if mode is self.CREATE or mode is self.MATCH: # Create
-            self.unHighlight()
-            self.deSelectShape()
+        # if mode is self.CREATE or mode is self.MATCH: # Create
+        self.unHighlight()
+        self.deSelectShape()
 
     def unHighlight(self):
         if self.hShape:
@@ -129,7 +129,7 @@ class Canvas(QWidget):
     def selectedVertex(self):
         return self.hVertex is not None
 
-    def findEdge(self, p1, p2):
+    def findEdgeByPoints(self, p1, p2):
         for shape in reversed([s for s in self.shapes if self.isVisible(s)]):
             try:
                 id1 = shape.points.index(p1)
@@ -140,6 +140,13 @@ class Canvas(QWidget):
             except:
                 continue
         return (None, None)
+
+    def findEdgeByText(self, text):
+        for shape in reversed([s for s in self.shapes]):
+            #FIXME: should show hidden shapes
+            if text in shape.correspondence:
+                return (shape, shape.correspondence[text])
+        return None
 
     def mouseMoveEvent(self, ev):
         """Update line with last point and current coordinates."""
@@ -277,7 +284,7 @@ class Canvas(QWidget):
             if index is not None:
                 # print(self.points[index[0]])
                 # print(self.points[index[1]])
-                (shape, idLine) = self.findEdge(self.points[index[0]], self.points[index[1]])
+                (shape, idLine) = self.findEdgeByPoints(self.points[index[0]], self.points[index[1]])
                 self.hShape, self.hEdge = shape, idLine
                 if shape is not None:
                     shape.highlightEdge(idLine)
@@ -324,7 +331,7 @@ class Canvas(QWidget):
                 self.prevPoint = pos
                 self.repaint()
             elif self.matching():
-                self.selectShapeEdge(pos)
+                self.selectShapeEdgeByPoint(pos)
         elif ev.button() == Qt.RightButton and self.editing():
             self.selectShapePoint(pos)
             self.prevPoint = pos
@@ -404,19 +411,23 @@ class Canvas(QWidget):
                 self.selectionChanged.emit(self.id, True)
                 return
 
-    def selectShapeEdge(self, point):
+    def selectShapeEdge(self, shape, idLine):
+        shape.highlightEdge(idLine, True)
+        self.selectedShape = shape
+        self.selectedEdge = idLine
+        self.selectionChanged.emit(self.id, True)
+        self.update()
+
+    def selectShapeEdgeByPoint(self, point):
         self.deSelectShape()
         index = self.pointOnLine(point)
         if index is not None:
             # print(self.points[index[0]])
             # print(self.points[index[1]])
-            (shape, idLine) = self.findEdge(self.points[index[0]], self.points[index[1]])
+            (shape, idLine) = self.findEdgeByPoints(self.points[index[0]], self.points[index[1]])
             self.hShape, self.hEdge = shape, idLine
             if shape is not None:
-                shape.highlightEdge(idLine, True)
-                self.selectShape = shape
-                self.selectedEdge = idLine
-                self.selectionChanged.emit(self.id, True)
+                self.selectShapeEdge(shape, idLine)
                 return
 
     def calculateOffsets(self, shape, point):
@@ -581,12 +592,12 @@ class Canvas(QWidget):
             len3 = e3.manhattanLength()
             len1 = e1.manhattanLength()
             len2 = e2.manhattanLength()
-            #FIXME:inner product method is supported since PyQt5
+
             theta = np.arccos(QPointF.dotProduct(e1, e2)/(len1*len2 + self.lineEps)) / pi * 180
             dist = np.fabs(e1.x()*e2.y()-e1.y()*e2.x()) / (len3 + self.lineEps)
             # print('theta: {}, dist: {}'.format(theta, dist))
             # if theta > min(150+len3/10., 170) and dist < len3 / 40.0:
-            if dist < 2.0:
+            if theta > 90 and dist < 2.0:
                 return line
         return None
 
