@@ -46,6 +46,7 @@ from labelme.zoomWidget import ZoomWidget
 from labelme.labelDialog import LabelDialog
 from labelme.colorDialog import ColorDialog
 from labelme.labelFile import LabelFile, LabelFileError
+from labelme.correspondenceFile import CorrespondenceFile, CorrespondenceFileError
 from labelme.toolBar import ToolBar
 
 
@@ -113,6 +114,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.filename = [None] * numCanvas
         self.imageData = [None] * numCanvas
         self.labelFile = [None] * numCanvas
+        self.crspdcFile = None
 
         self._noSelectionSlot = [False] * numCanvas
         self._beginner = True
@@ -124,6 +126,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         listLayout = QVBoxLayout()
         listLayout.setContentsMargins(0, 0, 0, 0)
+        self.correspondenceNames = []
         self.correspondenceList = QListWidget()
         self.correspondenceList.setVisible(False)
         # FIXME
@@ -360,9 +363,9 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # Application state.
         self.image = [QImage(), QImage()]
-        self.filename = [filename, filename] #FIXME: different filenames
+        self.filename = [None, None] #FIXME: different filenames
         self.labeling_once = output is not None
-        self.output = [output, output] #FIXME: different filenames
+        self.output = [None, None] #FIXME: different filenames
         self.recentFiles = []
         self.maxRecent = 7
         self.lineColor = None
@@ -393,8 +396,8 @@ class MainWindow(QMainWindow, WindowMixin):
         # Populate the File menu dynamically.
         self.updateFileMenu()
         # Since loading the file may take some time, make sure it runs in the background.
-        for can in range(numCanvas):
-            self.queueEvent(partial(self.loadFile, can, self.filename))
+        # for can in range(numCanvas):
+        #     self.queueEvent(partial(self.loadFile, can, self.filename))
 
         # Callbacks:
         self.zoomWidget.valueChanged.connect(self.paintCanvas)
@@ -490,6 +493,9 @@ class MainWindow(QMainWindow, WindowMixin):
         self.imageData[canvas] = None
         # self.labelFile = None
         self.labelFile[canvas] = None
+        self.crspdcFile = None
+        self.correspondenceNames = []
+        self.correspondenceList.clear()
         self.labelList[canvas].clear()
         self.canvas[canvas].resetState()
 
@@ -642,12 +648,15 @@ class MainWindow(QMainWindow, WindowMixin):
         '''
         text = self.labelDialog.popUp()
         items = self.correspondenceList.findItems(text, Qt.MatchExactly)
-        if len(items) > 0:
+        if (len(items) > 0) or (text in self.correspondenceNames):
             print('Correspondence named {} already exists'.format(text))
             return
         shape1.correspondence[text] = edge1
         shape2.correspondence[text] = edge2
+        self.correspondenceNames.append(text)
         item = QListWidgetItem(text)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Checked)
         self.correspondenceList.addItem(item)
 
     def remCorrespondence(self, item):
@@ -655,10 +664,12 @@ class MainWindow(QMainWindow, WindowMixin):
         # assert(len(items) <= 1)
         # if len(items) == 1:
         #     item = items[0]
+        name = item.text()
+        self.correspondenceNames.remove(name)
         self.correspondenceList.takeItem(self.correspondenceList.row(item))
         for can in range(numCanvas):
             for shape in reversed([s for s in self.canvas[can].shapes]):
-                if shape.correspondence.pop(item.text(), None) is not None:
+                if shape.correspondence.pop(name, None) is not None:
                     break
         # else:
         #     print('No item named {}'.format(text))
@@ -672,8 +683,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def loadLabels(self, canvas, shapes):
         s = []
-        for label, points, line_color, fill_color in shapes:
-            shape = Shape(label=label)
+        for label, points, line_color, fill_color, shape_id in shapes:
+            shape = Shape(label=label, id=shape_id)
             for x, y in points:
                 shape.addPoint(QPointF(x, y))
             shape.close()
@@ -692,6 +703,17 @@ class MainWindow(QMainWindow, WindowMixin):
             #         self.correspondenceList.addItem(item)
         self.canvas[canvas].loadShapes(s)
 
+    def saveCrspdc(self):
+        cf = CorrespondenceFile()
+        try:
+            cf.save(self.correspondenceNames, [c.shapes for c in self.canvas], self.filename)
+            self.crspdcFile = cf
+            return True
+        except CorrespondenceFileError as e:
+            self.errorMessage('Error saving crspdc data',
+                    '<b>%s</b>' % e)
+            return False
+
     def saveLabels(self, canvas, filename):
         lf = LabelFile()
         def format_shape(s):
@@ -700,7 +722,8 @@ class MainWindow(QMainWindow, WindowMixin):
                                 if s.line_color != self.lineColor else None,
                         fill_color=s.fill_color.getRgb()\
                                 if s.fill_color != self.fillColor else None,
-                        points=[(p.x(), p.y()) for p in s.points])
+                        points=[(p.x(), p.y()) for p in s.points],
+                        shape_id=s.id)
 
 # ,
 # correspondence=s.correspondence
@@ -804,6 +827,22 @@ class MainWindow(QMainWindow, WindowMixin):
             for item, shape in self.itemsToShapes[can]:
                 item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
+    def loadCrspdc(self):
+        assert(self.filename[0] is not None)
+        assert(self.filename[1] is not None)
+        crspdcName = CorrespondenceFile.getCrspdcFileFromNames(self.filename)
+        if QFile.exists(crspdcName):
+            self.crspdcFile = CorrespondenceFile(crspdcName)
+            self.correspondenceNames = self.crspdcFile.crspdcByName
+            for can in range(numCanvas):
+                for shape in self.shapes[can]:
+                    if shape.id in self.crspdcFile.crspdcById:
+                        shape.correspondence = self.crspdcFile.crspdcById[shape.id]
+            for name in self.correspondenceNames:
+                item = QListWidgetItem(name)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                self.correspondenceList.addItem(item)
+
     def loadFile(self, canvas, filename=None):
         """Load the specified file, or the last opened file if None."""
         self.resetState(canvas)
@@ -812,6 +851,8 @@ class MainWindow(QMainWindow, WindowMixin):
             filename = self.settings.get('filename', '')
         filename = str(filename)
         if QFile.exists(filename):
+            if QFile.exists(LabelFile.getLabelFileFromName(filename)):
+                filename = LabelFile.getLabelFileFromName(filename)
             if LabelFile.isLabelFile(filename):
                 try:
                     self.labelFile[canvas] = LabelFile(filename)
@@ -944,17 +985,21 @@ class MainWindow(QMainWindow, WindowMixin):
             filename = str(filename)
             if filename:
                 self.loadFile(can, filename)
+        self.loadCrspdc()
 
     def saveFile(self, _value=False):
         for can in range(numCanvas):
             assert not self.image[can].isNull(), "cannot save empty image"
             if self.hasLabels(can):
-                if self.labelFile[can]:
-                    self._saveFile(can, self.filename[can])
-                elif self.output[canvas]:
-                    self._saveFile(can, self.output[can])
-                else:
-                    self._saveFile(can, self.saveFileDialog(can))
+                # if self.labelFile[can]:
+                #     self._saveFile(can, self.filename[can])
+                # elif self.output[canvas]:
+                #     self._saveFile(can, self.output[can])
+                # else:
+                #     self._saveFile(can, self.saveFileDialog(can))
+                self._saveFile(can, LabelFile.getLabelFileFromName(self.filename[can]))
+        self.saveCrspdc()
+
 
     def saveFileAs(self, _value=False):
         for can in range(numCanvas):

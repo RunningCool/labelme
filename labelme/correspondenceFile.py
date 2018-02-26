@@ -20,19 +20,20 @@
 from base64 import b64encode, b64decode
 import json
 import os.path
+import sys
 
-import six
+PY2 = sys.version_info[0] == 2
 
 
 class CorrespondenceFileError(Exception):
     pass
 
 class CorrespondenceFile(object):
-    suffix = '.json'
+    suffix = '.crd'
 
     def __init__(self, filename=None):
-        self.crspdcById = [{}] * 2
-        self.crspdcByPoints = {}
+        self.crspdcById = {}
+        self.crspdcByName = []
         self.imagePath = [None] * 2
         if filename is not None:
             self.load(filename)
@@ -42,35 +43,53 @@ class CorrespondenceFile(object):
             with open(filename, 'rb') as f:
                 data = json.load(f)
                 imagePath = data['imagePath']
-                crspdcById = data['crspdcById']
-                crspdcByPoints = data['crspdcByPoints']
+                # crspdcById = data['crspdcById']
+                # crspdcByName = data['crspdcByPoints']
 
                 # Only replace data after everything is loaded.
                 self.crspdcById = crspdcById
-                self.crspdcByPoints = crspdcByPoints
+                self.crspdcByName = crspdcByNames
                 self.imagePath = imagePath
         except Exception as e:
             raise CorrespondenceFileError(e)
 
-    def save(self, filename, shapes, imagePath, imageData,
-            lineColor=None, fillColor=None):
+    def extractCorrespondence(self, shapes):
+        self.crspdcById = {}
+        for canvasShapes in shapes:
+            for shape in canvasShapes:
+                self.crspdcById[shape.id] = shape.correspondence
+
+
+    def save(self, crspdcByName, shapes, imagePath, filename=None):
+        self.extractCorrespondence(shapes)
+        self.crspdcByName = crspdcByName
+        self.imagePath = imagePath
+        assert(len(self.imagePath) == 2)
+        assert(len(shapes) == 2)
+        if filename is None:
+            filename = CorrespondenceFile.getCrspdcFileFromNames(imagePath)
+
+        data = dict(
+            crspdcById=self.crspdcById,
+            crspdcByName=self.crspdcByName,
+            imagePath=imagePath
+        )
         try:
-            with open(filename, 'wb') as f:
-                if six.PY3:
-                    imageData = b64encode(imageData.encode('utf-8'))
-                elif six.PY2:
-                    imageData = b64encode(imageData)
-                else:
-                    raise RuntimeError('Unsupported Python version.')
-                json.dump(dict(
-                    shapes=shapes,
-                    lineColor=lineColor, fillColor=fillColor,
-                    imagePath=imagePath,
-                    imageData=imageData),
-                    f, ensure_ascii=True, indent=2)
+            with open(filename, 'wb' if PY2 else 'w') as f:
+                json.dump(data, f, ensure_ascii=True, indent=2)
         except Exception as e:
             raise CorrespondenceFileError(e)
 
     @staticmethod
     def isCorrespondenceFile(filename):
         return os.path.splitext(filename)[1].lower() == CorrespondenceFile.suffix
+
+    @staticmethod
+    def getCrspdcFileFromNames(filenames):
+        assert(len(filenames) == 2)
+        path, f1 = os.path.split(filenames[0])
+        f1, _ = os.path.splitext(f1)
+        _, f2 = os.path.split(filenames[1])
+        f2, _ = os.path.splitext(f2)
+        f1, f2 = [f2, f1] if f1 > f2 else [f1, f2]
+        return path + '/' + f1 + '_' + f2 + CorrespondenceFile.suffix
