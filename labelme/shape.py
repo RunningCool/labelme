@@ -59,7 +59,8 @@ class Shape(object):
 
     def __init__(self, label=None, line_color=None, id=None):
         self.label = label
-        self.id = id or random.uniform(0, 9223372036854775807)
+        self.id = id or int(random.uniform(0, 9223372036854775807))
+        print(type(self.id))
         print('A shape with id: {} spawned'.format(self.id))
         self.points = []
         self.fill = False

@@ -146,7 +146,7 @@ class Canvas(QWidget):
             #FIXME: should show hidden shapes
             if text in shape.correspondence:
                 return (shape, shape.correspondence[text])
-        return None
+        return (None, None)
 
     def mouseMoveEvent(self, ev):
         """Update line with last point and current coordinates."""
