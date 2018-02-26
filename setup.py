@@ -67,7 +67,6 @@ setup(
         'matplotlib',
         'Pillow>=2.8.0',
         'scipy',
-        'six',
         'PyYAML',
     ],
     license='GPLv3',

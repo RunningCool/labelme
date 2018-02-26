@@ -20,8 +20,10 @@
 from base64 import b64encode, b64decode
 import json
 import os.path
+import sys
 
-import six
+
+PY2 = sys.version_info[0] == 2
 
 
 class LabelFileError(Exception):
@@ -39,18 +41,13 @@ class LabelFile(object):
 
     def load(self, filename):
         try:
-            with open(filename, 'rb') as f:
+            with open(filename, 'rb' if PY2 else 'r') as f:
                 data = json.load(f)
                 imagePath = data['imagePath']
-                if six.PY3:
-                    imageData = b64decode(data['imageData']).decode('utf-8')
-                elif six.PY2:
-                    imageData = b64decode(data['imageData'])
-                else:
-                    raise RuntimeError('Unsupported Python version.')
+                imageData = b64decode(data['imageData'])
                 lineColor = data['lineColor']
                 fillColor = data['fillColor']
-                shapes = ((s['label'], s['points'], s['line_color'], s['fill_color'])\
+                shapes = ((s['label'], s['points'], s['line_color'], s['fill_color'], s['shape_id'])\
                         for s in data['shapes'])
                 # Only replace data after everything is loaded.
                 self.shapes = shapes
@@ -63,23 +60,25 @@ class LabelFile(object):
 
     def save(self, filename, shapes, imagePath, imageData,
             lineColor=None, fillColor=None):
+        data = dict(
+            shapes=shapes,
+            lineColor=lineColor,
+            fillColor=fillColor,
+            imagePath=imagePath,
+            imageData=b64encode(imageData).decode('utf-8'),
+        )
         try:
-            with open(filename, 'wb') as f:
-                if six.PY3:
-                    imageData = b64encode(imageData.encode('utf-8'))
-                elif six.PY2:
-                    imageData = b64encode(imageData)
-                else:
-                    raise RuntimeError('Unsupported Python version.')
-                json.dump(dict(
-                    shapes=shapes,
-                    lineColor=lineColor, fillColor=fillColor,
-                    imagePath=imagePath,
-                    imageData=imageData),
-                    f, ensure_ascii=True, indent=2)
+            with open(filename, 'wb' if PY2 else 'w') as f:
+                json.dump(data, f, ensure_ascii=True, indent=2)
         except Exception as e:
             raise LabelFileError(e)
 
     @staticmethod
     def isLabelFile(filename):
         return os.path.splitext(filename)[1].lower() == LabelFile.suffix
+
+    @staticmethod
+    def getLabelFileFromName(filename):
+        base, ext = os.path.splitext(filename)
+        path = base + LabelFile.suffix
+        return path
