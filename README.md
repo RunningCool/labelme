@@ -1,16 +1,9 @@
 <img src="https://github.com/wkentaro/labelme/blob/master/labelme/icons/icon.png?raw=true" align="right" />
 
-labelme: Image Annotation Tool with Python
+labelme-ng: Images Correspondence Annotation Tool with Python
 ==========================================
 
-[![PyPI Version](https://img.shields.io/pypi/v/labelme.svg)](https://pypi.python.org/pypi/labelme)
-[![Travis Build Status](https://travis-ci.org/wkentaro/labelme.svg?branch=master)](https://travis-ci.org/wkentaro/labelme)
-[![Appveyor Build status](https://ci.appveyor.com/api/projects/status/epxf9b6c47cw373y/branch/master?svg=true)](https://ci.appveyor.com/project/wkentaro/labelme/branch/master)
-[![Docker Build Status](https://img.shields.io/docker/build/wkentaro/labelme.svg)](https://hub.docker.com/r/wkentaro/labelme)
-
-
-Labelme is a graphical image annotation tool inspired by <http://labelme.csail.mit.edu>.  
-It is written in Python and uses Qt for its graphical interface.
+Labelme-ng is a fork from [wkentaro/labelme](https://github.com/wkentaro/labelme), supplying correspondence annotation feature for pairs of images. It is written in Python and uses Qt for its graphical interface.
 
 
 Requirements
