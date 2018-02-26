@@ -575,7 +575,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.toggleMode(self.MATCH)
 
     def toggleMode(self, mode):
-        print('mode changed to: {}'.format(mode))
+        # print('mode changed to: {}'.format(mode))
         for can in range(numCanvas):
             self.canvas[can].setEditing(mode)
         self.actions.createMode.setEnabled(mode is not self.CREATE)
@@ -684,6 +684,8 @@ class MainWindow(QMainWindow, WindowMixin):
     def loadLabels(self, canvas, shapes):
         s = []
         for label, points, line_color, fill_color, shape_id in shapes:
+            print(type(shape_id))
+            print(shape_id)
             shape = Shape(label=label, id=shape_id)
             for x, y in points:
                 shape.addPoint(QPointF(x, y))
@@ -834,10 +836,14 @@ class MainWindow(QMainWindow, WindowMixin):
         if QFile.exists(crspdcName):
             self.crspdcFile = CorrespondenceFile(crspdcName)
             self.correspondenceNames = self.crspdcFile.crspdcByName
+            print(self.crspdcFile.crspdcById)
             for can in range(numCanvas):
-                for shape in self.shapes[can]:
-                    if shape.id in self.crspdcFile.crspdcById:
-                        shape.correspondence = self.crspdcFile.crspdcById[shape.id]
+                print('[DEBUG] checking canvas {}'.format(can))
+                for shape in self.canvas[can].shapes:
+                    print('[DEBUG] shape_id: {}'.format(shape.id))
+                    if str(shape.id) in self.crspdcFile.crspdcById:
+                        print('wow i found it')
+                        shape.correspondence = self.crspdcFile.crspdcById[str(shape.id)]
             for name in self.correspondenceNames:
                 item = QListWidgetItem(name)
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)

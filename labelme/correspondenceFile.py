@@ -43,12 +43,12 @@ class CorrespondenceFile(object):
             with open(filename, 'rb') as f:
                 data = json.load(f)
                 imagePath = data['imagePath']
-                # crspdcById = data['crspdcById']
-                # crspdcByName = data['crspdcByPoints']
+                crspdcById = data['crspdcById']
+                crspdcByName = data['crspdcByName']
 
                 # Only replace data after everything is loaded.
                 self.crspdcById = crspdcById
-                self.crspdcByName = crspdcByNames
+                self.crspdcByName = crspdcByName
                 self.imagePath = imagePath
         except Exception as e:
             raise CorrespondenceFileError(e)
@@ -57,6 +57,8 @@ class CorrespondenceFile(object):
         self.crspdcById = {}
         for canvasShapes in shapes:
             for shape in canvasShapes:
+                print('[DEBUG]')
+                print(type(shape.id))
                 self.crspdcById[shape.id] = shape.correspondence
 
 
