@@ -131,8 +131,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.correspondenceList.setVisible(False)
         self.correspondenceList.itemActivated.connect(self.correspondenceSelectionChanged)
         self.correspondenceList.itemSelectionChanged.connect(self.correspondenceSelectionChanged)
-        #FIXME
-        # self.correspondenceList.itemDoubleClicked.connect
+        #FIXME: find an approriate way to update correspondence
+        # self.correspondenceList.itemDoubleClicked.connect(self.editCorrespondence)
 
         self.labelList = [None] * numCanvas
         self.itemsToShapes = [[]] * numCanvas
@@ -636,21 +636,13 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.shapeLineColor.setEnabled(selected)
         self.actions.shapeFillColor.setEnabled(selected)
 
-    def addLabel(self, canvas, shape):
-        item = QListWidgetItem(shape.label)
-        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-        item.setCheckState(Qt.Checked)
-        self.itemsToShapes[canvas].append((item, shape))
-        self.labelList[canvas].addItem(item)
-        for action in self.actions.onShapesPresent:
-            action.setEnabled(True)
-
     def addCorrespondence(self, shape1, shape2, edge1, edge2):
         '''
         1. check unique correspondence id
         2. check existence of the same pair
         '''
-        text = self.labelDialog.popUp()
+        from time import gmtime, strftime
+        text = self.labelDialog.popUp(strftime("%Y%m%d%H%M%S", gmtime()))
         items = self.correspondenceList.findItems(text, Qt.MatchExactly)
         if (len(items) > 0) or (text in self.correspondenceNames):
             print('Correspondence named {} already exists'.format(text))
@@ -686,6 +678,22 @@ class MainWindow(QMainWindow, WindowMixin):
             for shape in reversed([s for s in self.canvas[can].shapes]):
                 if shape.correspondence.pop(text, None) is not None:
                     break
+
+    # def editCorrespondence(self, item):
+    #     assert(item is not None)
+    #     text = self.labelDialog.popUp(item.text())
+    #     if text is not None:
+    #         item.setText(text)
+    #         self.setDirty()
+
+    def addLabel(self, canvas, shape):
+        item = QListWidgetItem(shape.label)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Checked)
+        self.itemsToShapes[canvas].append((item, shape))
+        self.labelList[canvas].addItem(item)
+        for action in self.actions.onShapesPresent:
+            action.setEnabled(True)
 
     def remLabel(self, canvas, shape):
         for index, (item, shape_) in enumerate(self.itemsToShapes[canvas]):
@@ -796,7 +804,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
         position MUST be in global coordinates.
         """
-        text = self.labelDialog.popUp()
+        from time import gmtime, strftime
+        text = self.labelDialog.popUp(strftime("%Y%m%d%H%M%S", gmtime()))
         if text is not None:
             self.addLabel(canvas, self.canvas[canvas].setLastLabel(text))
             if self.beginner(): # Switch to edit mode.
