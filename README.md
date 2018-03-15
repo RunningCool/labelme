@@ -69,47 +69,12 @@ Run `labelme --help` for detail.
 
 ```bash
 labelme  # Open GUI
-labelme static/apc2016_obj3.jpg  # Specify file
-labelme static/apc2016_obj3.jpg -O static/apc2016_obj3.json  # Close window after the save
 ```
+The line annotations are saved in *.json* file, while the correspondence for two views are saved in *.crd* file. 
 
-The annotations are saved as a [JSON](http://www.json.org/) file. The
-file includes the image itself.
-
-**Visualization**
-
-To view the json file quickly, you can use utility script:
-
-```bash
-labelme_draw_json static/apc2016_obj3.json
-```
-
-**Convert to Dataset**
-
-To convert the json to set of image and label, you can run following:
-
-
-```bash
-labelme_json_to_dataset static/apc2016_obj3.json
-```
-
-
-Sample
-------
-
-- [Original Image](https://github.com/wkentaro/labelme/blob/master/static/apc2016_obj3.jpg)
-- [Screenshot](https://github.com/wkentaro/labelme/blob/master/static/apc2016_obj3_screenshot.jpg)
-- [Generated Json File](https://github.com/wkentaro/labelme/blob/master/static/apc2016_obj3.json)
-- [Visualized Json File](https://github.com/wkentaro/labelme/blob/master/static/apc2016_obj3_draw_json.jpg)
-
-
-Screencast
-----------
-
-<img src="https://github.com/wkentaro/labelme/raw/master/static/screencast.gif" width="70%"/>
 
 
 Acknowledgement
 ---------------
 
-This repo is the fork of [mpitid/pylabelme](https://github.com/mpitid/pylabelme), whose development has already stopped.
+Labelme-ng is a fork from [wkentaro/labelme](https://github.com/wkentaro/labelme), supplying correspondence annotation feature for pairs of images. The repo of [wkentaro/labelme](https://github.com/wkentaro/labelme) is a fork of [mpitid/pylabelme](https://github.com/mpitid/pylabelme), whose development has already stopped.
