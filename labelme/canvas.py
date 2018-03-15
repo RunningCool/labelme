@@ -471,6 +471,7 @@ class Canvas(QWidget):
         if self.selectedShape:
             self.selectedShape.selected = False
             self.selectedShape._selectedEdgeIndex = None
+            self.selectedShape._highlightEdgeIndex = None
             self.selectedShape = None
             self.selectedEdge = None
             self.setHiding(False)
@@ -580,8 +581,8 @@ class Canvas(QWidget):
                         self.lines.append((idxList[i], idxList[i+1]))
                 except KeyError:
                     print ("keyError ", len(shape.points), len(shape.lines))
-        print(self.points)
-        print(self.lines)
+        # print(self.points)
+        # print(self.lines)
 
     def pointOnLine(self, pos):
         for line in self.lines:
