@@ -57,8 +57,9 @@ class CorrespondenceFile(object):
         self.crspdcById = {}
         for canvasShapes in shapes:
             for shape in canvasShapes:
-                print('[DEBUG]')
-                print(type(shape.id))
+                # If there is no correspondence, skip it for god's sake
+                if len(shape.correspondence) == 0:
+                    continue
                 self.crspdcById[shape.id] = shape.correspondence
 
 
